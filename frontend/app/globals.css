@@ -1,0 +1,10 @@
+@tailwind base; @tailwind components; @tailwind utilities;
+:root { color-scheme: dark; }
+body { @apply bg-ink text-slate-200 antialiased; background-image: radial-gradient(60% 50% at 15% 0%, rgba(91,124,255,.18), transparent), radial-gradient(50% 40% at 90% 10%, rgba(192,132,252,.14), transparent), radial-gradient(40% 40% at 50% 100%, rgba(34,211,238,.08), transparent); background-attachment: fixed; }
+.glass { @apply bg-panel/70 border border-edge rounded-2xl backdrop-blur-xl; }
+.btn { @apply inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium border border-edge bg-white/5 hover:bg-white/10 transition disabled:opacity-40; }
+.btn-primary { @apply bg-gradient-to-r from-aether-500 to-plasma text-white border-transparent shadow-glow hover:brightness-110; }
+.tab { @apply px-3 py-1.5 rounded-lg text-sm text-slate-400 hover:text-white; }
+.tab-on { @apply bg-white/10 text-white; }
+.chip { @apply text-[11px] px-2 py-0.5 rounded-full border border-edge text-slate-300; }
+.kbd { @apply font-mono text-[11px] px-1.5 py-0.5 rounded border border-edge bg-white/5; }

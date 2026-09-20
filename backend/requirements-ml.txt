@@ -1,0 +1,9 @@
+# Optional ML stack: CNN (ResNet-101 + FPN), ChromaDB RAG, LangGraph orchestration, diffusion inpainting
+torch
+torchvision
+scikit-learn
+chromadb
+sentence-transformers
+langgraph
+langchain-core
+# diffusers  # uncomment for Stable-Diffusion inpainting (pass as `diffusion=` to services.editing.smart_erase)

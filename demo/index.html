@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Aether Studio — Edge Demo · Nikhil Chary Sriramoju</title>
+<style>
+:root{--bg:#05060d;--panel:#0b0e1c;--edge:#1b2140;--a:#7c9cff;--n:#22d3ee;--p:#c084fc;color-scheme:dark}
+*{box-sizing:border-box}body{margin:0;font:14px/1.5 Inter,system-ui,sans-serif;background:radial-gradient(60% 50% at 15% 0,#5b7cff30,transparent),radial-gradient(50% 40% at 90% 10%,#c084fc22,transparent),var(--bg);color:#cbd5e1;min-height:100vh}
+header,footer{padding:14px 22px;border-bottom:1px solid var(--edge);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px}footer{border:0;border-top:1px solid var(--edge);justify-content:center;font-size:12px;color:#64748b;margin-top:30px}
+a{color:var(--a);text-decoration:none}a:hover{color:#fff}h1{font-size:clamp(28px,5vw,46px);margin:.2em 0;color:#fff;letter-spacing:-.02em}
+.wrap{max-width:1200px;margin:0 auto;padding:22px}.grid{display:grid;gap:16px;grid-template-columns:1fr 360px}@media(max-width:900px){.grid{grid-template-columns:1fr}}
+.card{background:#0b0e1cb3;border:1px solid var(--edge);border-radius:16px;padding:14px;backdrop-filter:blur(12px)}
+.drop{border:1.5px dashed var(--edge);border-radius:16px;padding:44px;text-align:center;cursor:pointer;transition:.2s}.drop:hover{border-color:var(--a);box-shadow:0 0 40px -8px #5b7cff90}
+button,select{background:#ffffff10;color:#e2e8f0;border:1px solid var(--edge);border-radius:10px;padding:7px 12px;cursor:pointer;font:inherit}button:hover{background:#ffffff1c}.pri{background:linear-gradient(90deg,#5b7cff,#c084fc);border:0;color:#fff}
+canvas{max-width:100%;border-radius:12px;background:#000}.sw{display:inline-flex;align-items:center;gap:6px;margin:3px;padding:3px 9px 3px 4px;border:1px solid var(--edge);border-radius:999px;font:12px ui-monospace,monospace}.sw i{width:16px;height:16px;border-radius:50%;display:block}
+pre{background:#0008;border-radius:12px;padding:12px;font:11px/1.5 ui-monospace,monospace;overflow:auto;max-height:300px;white-space:pre-wrap}.row{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}.tag{font-size:11px;padding:2px 9px;border:1px solid var(--edge);border-radius:999px}
+.ok{color:#34d399}.bad{color:#f59e0b}.who{display:flex;gap:10px;align-items:center}.av{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#5b7cff,#c084fc);display:grid;place-items:center;color:#fff;font-weight:700}
+</style></head><body>
+<header><div class="who"><div class="av">NC</div><div><div style="font-size:11px;letter-spacing:.2em;color:#64748b">DESIGNED &amp; BUILT BY</div><b style="color:#fff">Nikhil Chary Sriramoju</b></div></div>
+<div class="row" style="margin:0"><a class="tag" href="https://github.com/Nikhil-creat" target="_blank">GitHub</a><a class="tag" href="https://in.linkedin.com/in/nikhil-chary-sriramoju-95041b38a" target="_blank">LinkedIn</a><a class="tag" href="mailto:sriramojunikhil66@gmail.com">Email</a><a class="tag" href="tel:+916300556301">+91 6300556301</a></div></header>
+<div class="wrap">
+<span class="tag" style="color:var(--n)">Aether AI Screenshot Studio · private edge demo — runs 100% in your browser</span>
+<h1>Drop a screenshot. <span style="background:linear-gradient(90deg,#22d3ee,#7c9cff,#c084fc);-webkit-background-clip:text;color:transparent">See its design DNA.</span></h1>
+<div id="drop" class="drop"><b style="color:#fff">Drop an image or click to upload</b><div style="font-size:12px;color:#64748b">Nothing leaves your device.</div><input id="f" type="file" accept="image/*" hidden></div>
+<div id="app" class="grid" style="display:none;margin-top:16px">
+ <div class="card"><canvas id="c"></canvas>
+  <div class="row"><button data-m="normal">Normal</button><button data-m="protanopia">Protanopia</button><button data-m="deuteranopia">Deuteranopia</button><button data-m="tritanopia">Tritanopia</button><button data-m="dark">Dark mode</button><button id="dl" class="pri">Download PNG</button></div></div>
+ <div class="card"><b style="color:#fff">Palette</b><div id="pal"></div><b style="color:#fff">Gradient</b><div id="grad" style="margin:6px 0;height:38px;border-radius:10px"></div><div id="gcss" style="font:11px ui-monospace"></div>
+  <b style="color:#fff;display:block;margin-top:10px">WCAG contrast (text ↔ background)</b><div id="wc"></div>
+  <b style="color:#fff;display:block;margin-top:10px">Export tokens</b><div class="row"><select id="fmt"><option value="css">CSS variables</option><option value="json">Design tokens JSON</option><option value="tw">Tailwind config</option></select><button id="cp">Copy</button></div><pre id="out"></pre></div>
+</div></div>
+<footer>© <span id="y"></span> Aether AI Screenshot Studio · Designed &amp; built by <a href="https://github.com/Nikhil-creat">Nikhil Chary Sriramoju</a></footer>
+<script>
+const $=s=>document.querySelector(s);$("#y").textContent=new Date().getFullYear();
+const c=$("#c"),x=c.getContext("2d",{willReadFrequently:true});let base=null,pal=[];
+const hex=(r,g,b)=>"#"+[r,g,b].map(v=>Math.round(v).toString(16).padStart(2,"0")).join("").toUpperCase();
+const lin=v=>{v/=255;return v<=.03928?v/12.92:((v+.055)/1.055)**2.4},lum=([r,g,b])=>.2126*lin(r)+.7152*lin(g)+.0722*lin(b);
+const rgb=h=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16)),cr=(a,b)=>{const[l1,l2]=[lum(rgb(a)),lum(rgb(b))].sort((p,q)=>q-p);return(l1+.05)/(l2+.05)};
+function kmeans(px,k=6,it=10){let cs=Array.from({length:k},(_,i)=>px[Math.floor(i*px.length/k)].slice());for(let n=0;n<it;n++){const s=cs.map(()=>[0,0,0,0]);for(const p of px){let b=0,d=1e9;cs.forEach((q,i)=>{const e=(p[0]-q[0])**2+(p[1]-q[1])**2+(p[2]-q[2])**2;if(e<d){d=e;b=i}});const t=s[b];t[0]+=p[0];t[1]+=p[1];t[2]+=p[2];t[3]++}cs=s.map((t,i)=>t[3]?[t[0]/t[3],t[1]/t[3],t[2]/t[3],t[3]]:cs[i])}return cs.sort((a,b)=>b[3]-a[3])}
+function load(file){const im=new Image();im.onload=()=>{const s=Math.min(1,900/im.width);c.width=im.width*s;c.height=im.height*s;x.drawImage(im,0,0,c.width,c.height);base=x.getImageData(0,0,c.width,c.height);analyze();$("#app").style.display="grid"};im.src=URL.createObjectURL(file)}
+function analyze(){const d=base.data,px=[];for(let i=0;i<d.length;i+=4*Math.max(1,Math.floor(d.length/4/6000)))px.push([d[i],d[i+1],d[i+2]]);
+ const cs=kmeans(px);pal=cs.map(v=>hex(...v));$("#pal").innerHTML=pal.map(p=>`<span class="sw"><i style="background:${p}"></i>${p}</span>`).join("");
+ const w=c.width,h=c.height,p=(xx,yy)=>{const i=(yy*w+xx)*4;return[d[i],d[i+1],d[i+2]]};const tl=p(2,2),br=p(w-3,h-3),tr=p(w-3,2);
+ const gx=lum(tr)-lum(tl),gy=lum(br)-lum(tr),ang=Math.round((Math.atan2(gy,gx)*180/Math.PI+90+360)%360);
+ const g=`linear-gradient(${ang}deg, ${hex(...tl)}, ${hex(...br)})`;$("#grad").style.background=g;$("#gcss").textContent=g;
+ const bg=pal[0];$("#wc").innerHTML=pal.slice(1,5).map(f=>{const r=cr(f,bg);return`<div class="row" style="margin:3px 0"><span class="sw"><i style="background:${f}"></i>${f} on ${bg}</span><span class="${r>=7?"ok":"bad"}">${r.toFixed(2)}:1 ${r>=7?"AAA ✓":r>=4.5?"AA ✓ / AAA ✗":"fail"}</span></div>`}).join("");tok()}
+function tok(){const f=$("#fmt").value,n=pal.map((p,i)=>[`c${i+1}`,p]);$("#out").textContent=f==="css"?`:root{\n${n.map(([k,v])=>`  --color-${k}: ${v};`).join("\n")}\n}`:f==="json"?JSON.stringify({color:Object.fromEntries(n.map(([k,v])=>[k,{value:v}]))},null,2):`// tailwind.config.js\nmodule.exports={theme:{extend:{colors:${JSON.stringify(Object.fromEntries(n),null,2)}}}}`}
+const M={protanopia:[[.567,.433,0],[.558,.442,0],[0,.242,.758]],deuteranopia:[[.625,.375,0],[.7,.3,0],[0,.3,.7]],tritanopia:[[.95,.05,0],[0,.433,.567],[0,.475,.525]]};
+function mode(m){const o=new ImageData(new Uint8ClampedArray(base.data),base.width,base.height),d=o.data;for(let i=0;i<d.length;i+=4){let r=d[i],g=d[i+1],b=d[i+2];
+ if(M[m]){const k=M[m];d[i]=k[0][0]*r+k[0][1]*g+k[0][2]*b;d[i+1]=k[1][0]*r+k[1][1]*g+k[1][2]*b;d[i+2]=k[2][0]*r+k[2][1]*g+k[2][2]*b}
+ else if(m==="dark"){const mx=Math.max(r,g,b),mn=Math.min(r,g,b),s=mx+mn;d[i]=s-r;d[i+1]=s-g;d[i+2]=s-b}}x.putImageData(o,0,0)}
+document.querySelectorAll("[data-m]").forEach(b=>b.onclick=()=>mode(b.dataset.m));$("#fmt").onchange=tok;$("#cp").onclick=()=>navigator.clipboard.writeText($("#out").textContent);
+$("#dl").onclick=()=>{const a=document.createElement("a");a.download="aether-edit.png";a.href=c.toDataURL();a.click()};
+$("#drop").onclick=()=>$("#f").click();$("#f").onchange=e=>e.target.files[0]&&load(e.target.files[0]);
+$("#drop").ondragover=e=>e.preventDefault();$("#drop").ondrop=e=>{e.preventDefault();load(e.dataTransfer.files[0])};
+</script></body></html>

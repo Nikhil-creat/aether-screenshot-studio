@@ -1,0 +1,13 @@
+# Core (runs everything with classical CV + lite RAG + built-in graph runner)
+fastapi>=0.115
+uvicorn[standard]
+python-multipart
+pydantic>=2
+numpy
+Pillow
+opencv-python-headless
+PyJWT
+celery[redis]
+redis
+pycrdt
+pycrdt-websocket

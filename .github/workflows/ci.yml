@@ -1,0 +1,22 @@
+name: ci
+on: [push, pull_request]
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - run: pip install numpy Pillow opencv-python-headless PyJWT
+        working-directory: backend
+      - run: python -m tests.test_core
+        working-directory: backend
+  demo-pages:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    permissions: { pages: write, id-token: write }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: demo }
+      - uses: actions/deploy-pages@v4
