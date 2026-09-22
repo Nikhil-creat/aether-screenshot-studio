@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Aether Studio — edit screenshots, photos and PDFs in your browser · Nikhil Chary Sriramoju</title>
-<meta name="description" content="Private in-browser editor for PNG, JPG, WebP, GIF, BMP, AVIF, SVG, HEIC, TIFF and PDF. Replace text with matched fonts, erase, extend, redact private info, translate, audit contrast and export to PDF, SVG or code. Designed and built by Nikhil Chary Sriramoju.">
-<meta name="author" content="Nikhil Chary Sriramoju">
-<meta property="og:title" content="Aether Studio by Nikhil Chary Sriramoju">
+<title>Aether Studio — edit screenshots, photos and PDFs in your browser · NIKHIL CHARY SRIRAMOJU</title>
+<meta name="description" content="Private in-browser editor for PNG, JPG, WebP, GIF, BMP, AVIF, SVG, HEIC, TIFF and PDF. Replace text with matched fonts, erase, extend, redact private info, translate, audit contrast and export to PDF, SVG or code. Designed and Developed by NIKHIL CHARY SRIRAMOJU.">
+<meta name="author" content="NIKHIL CHARY SRIRAMOJU">
+<meta property="og:title" content="Aether Studio by NIKHIL CHARY SRIRAMOJU">
 <meta property="og:description" content="Edit screenshots, photos and PDFs privately in your browser.">
-<script type="application/ld+json">{"@context":"https://schema.org","@type":"Person","name":"Nikhil Chary Sriramoju","jobTitle":"B.Tech CSE student and AI systems builder","url":"https://github.com/Nikhil-creat","sameAs":["https://github.com/Nikhil-creat","https://in.linkedin.com/in/nikhil-chary-sriramoju-95041b38a","https://www.instagram.com/nikhil__sriramoju"],"email":"sriramojunikhil66@gmail.com","telephone":"+916300556301"}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"Person","name":"NIKHIL CHARY SRIRAMOJU","jobTitle":"B.Tech CSE student and AI systems builder","url":"https://github.com/Nikhil-creat","sameAs":["https://github.com/Nikhil-creat","https://in.linkedin.com/in/nikhil-chary-sriramoju-95041b38a","https://www.instagram.com/nikhil__sriramoju"],"email":"sriramojunikhil66@gmail.com"}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
@@ -957,7 +957,7 @@ function renderA11y(){
 function renderCode(){
   const W=base.width,H=base.height,fm=o=>o.f.replace(/"/g,"'"),tp=o=>{const m=metr(o);return Math.round(o.y-m.asc)},lh=o=>{const m=metr(o);return Math.round(m.asc+m.desc)};
   if(codeFmt==='html')$('#codeOut').textContent=`<!-- Made with Aether Studio by Nikhil Chary Sriramoju -->\n<div class="screen" style="position:relative;width:${W}px;height:${H}px">\n  <img src="screen.png" alt="" width="${W}" height="${H}">\n${objs.map(o=>`  <p style="position:absolute;left:${Math.round(o.x)}px;top:${tp(o)}px;margin:0;color:${o.c};font:${o.it?'italic ':''}${o.w} ${Math.round(o.s*10)/10}px/${lh(o)}px ${fm(o)};letter-spacing:${o.sp||0}px;white-space:pre">${esc(o.t)}</p>`).join('\n')}\n</div>`;
-  else $('#codeOut').textContent=`// Made with Aether Studio by Nikhil Chary Sriramoju\nexport default function Screen() {\n  return (\n    <div className="relative" style={{ width: ${W}, height: ${H} }}>\n      <img src="/screen.png" alt="" width={${W}} height={${H}} />\n${objs.map(o=>`      <p className="absolute m-0 whitespace-pre" style={{ left: ${Math.round(o.x)}, top: ${tp(o)}, color: '${o.c}', letterSpacing: ${o.sp||0}, font: "${o.it?'italic ':''}${o.w} ${Math.round(o.s*10)/10}px/${lh(o)}px ${fm(o)}" }}>{${JSON.stringify(o.t)}}</p>`).join('\n')}\n    </div>\n  );\n}`;
+  else $('#codeOut').textContent=`// Made with Aether Studio by NIKHIL CHARY SRIRAMOJU\nexport default function Screen() {\n  return (\n    <div className="relative" style={{ width: ${W}, height: ${H} }}>\n      <img src="/screen.png" alt="" width={${W}} height={${H}} />\n${objs.map(o=>`      <p className="absolute m-0 whitespace-pre" style={{ left: ${Math.round(o.x)}, top: ${tp(o)}, color: '${o.c}', letterSpacing: ${o.sp||0}, font: "${o.it?'italic ':''}${o.w} ${Math.round(o.s*10)/10}px/${lh(o)}px ${fm(o)}" }}>{${JSON.stringify(o.t)}}</p>`).join('\n')}\n    </div>\n  );\n}`;
 }
 $$('#tokfmt .chip').forEach(b=>b.onclick=()=>{tokFmt=b.dataset.f;$$('#tokfmt .chip').forEach(x=>x.classList.toggle('on',x===b));renderTokens()});
 $$('#codefmt .chip').forEach(b=>b.onclick=()=>{codeFmt=b.dataset.k;$$('#codefmt .chip').forEach(x=>x.classList.toggle('on',x===b));renderCode()});
@@ -965,7 +965,7 @@ async function copyText(t){try{await navigator.clipboard.writeText(t);toast('Cop
 $('#tokCopy').onclick=()=>copyText($('#tokOut').textContent);$('#codeCopy').onclick=()=>copyText($('#codeOut').textContent);
 
 /* ---------- export: PNG, JPG, WebP, PDF, SVG, project ---------- */
-const WM='Edited with Aether Studio by Nikhil Chary Sriramoju';
+const WM='Edited with Aether Studio by NIKHIL CHARY SRIRAMOJU';
 function drawWM(g,w,h){const s=Math.max(11,Math.round(w/48));g.save();g.font=`500 ${s}px system-ui,sans-serif`;g.textBaseline='bottom';g.textAlign='right';g.fillStyle='rgba(0,0,0,.45)';g.fillText(WM,w-s+1,h-s*.6+1);g.fillStyle='rgba(255,255,255,.88)';g.fillText(WM,w-s,h-s*.6);g.restore()}
 function renderSnap(s,wm,bg){const c=document.createElement('canvas');c.width=s.w;c.height=s.h;const g=c.getContext('2d');if(bg){g.fillStyle=bg;g.fillRect(0,0,s.w,s.h)}const t=document.createElement('canvas');t.width=s.w;t.height=s.h;t.getContext('2d').putImageData(s.img,0,0);g.drawImage(t,0,0);JSON.parse(s.o).forEach(o=>drawObj(g,o));if(wm)drawWM(g,s.w,s.h);return c}
 function saveBlob(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),5000)}
@@ -991,11 +991,11 @@ const doExport=guard(async(fmtOverride)=>{
     idx.forEach((i,k)=>{const p=pages[i],s=snap(i),c=renderSnap(s,wm,'#ffffff'),wpt=p.pdfSize?p.pdfSize[0]:s.w*.75,hpt=p.pdfSize?p.pdfSize[1]:s.h*.75,or=wpt>hpt?'l':'p',ll=$('#xl').checked;
       if(k===0)doc=new jsPDF({unit:'pt',format:[wpt,hpt],orientation:or,compress:true});else doc.addPage([wpt,hpt],or);
       doc.addImage(c.toDataURL(ll?'image/png':'image/jpeg',q),ll?'PNG':'JPEG',0,0,wpt,hpt,undefined,'FAST');if($('#xt').checked)invisibleText(doc,s,wpt/s.w)});
-    doc.setProperties({title:name,author:'Nikhil Chary Sriramoju',creator:'Aether AI Screenshot Studio'});saveBlob(doc.output('blob'),`${name}-edited.pdf`);
+    doc.setProperties({title:name,author:'NIKHIL CHARY SRIRAMOJU',creator:'Aether AI Screenshot Studio'});saveBlob(doc.output('blob'),`${name}-edited.pdf`);
   }else if(fmt==='svg'){
     for(const i of idx){saveBlob(new Blob([svgOf(snap(i),wm)],{type:'image/svg+xml'}),`${name}${idx.length>1?'-p'+(i+1):''}-edited.svg`)}
   }else if(fmt==='json'){
-    const proj={v:1,app:'Aether Studio',author:'Nikhil Chary Sriramoju',pages:idx.map(i=>{const s=snap(i),c=renderSnap({...s,o:'[]'},false);return{name:pages[i].name,w:s.w,h:s.h,png:c.toDataURL('image/png'),o:s.o,ln:s.ln,pdfSize:pages[i].pdfSize}})};
+    const proj={v:1,app:'Aether Studio',author:'NIKHIL CHARY SRIRAMOJU',pages:idx.map(i=>{const s=snap(i),c=renderSnap({...s,o:'[]'},false);return{name:pages[i].name,w:s.w,h:s.h,png:c.toDataURL('image/png'),o:s.o,ln:s.ln,pdfSize:pages[i].pdfSize}})};
     saveBlob(new Blob([JSON.stringify(proj)],{type:'application/json'}),`${name}.aether.json`);
   }else if(fmt==='pdfvec'){
     const msg=await exportRealPdf(idx,name,wm);setBusy(null);toast(msg);return;
@@ -1151,8 +1151,8 @@ const PROJ=[
  ['AI Interview Prep Agent','Mock interviews for Indian tech placements that adapt to a candidate\'s resume and weak topics.',['Agents','RAG']]];
 $('#projGrid').innerHTML=PROJ.map(p=>`<div class="proj"><h3>${esc(p[0])}</h3><p>${esc(p[1])}</p><div class="tg">${p[2].map(t=>`<span>${esc(t)}</span>`).join('')}</div></div>`).join('');
 $('#skills').innerHTML=['Python','PyTorch','Computer vision','Agentic AI','RAG','LangGraph','FastAPI','Next.js','TypeScript','Docker','Cybersecurity','Power BI'].map(s=>`<span class="chip" style="cursor:default">${s}</span>`).join('');
-const CARD={first:'Nikhil Chary',last:'Sriramoju',title:'B.Tech CSE (final year), AI systems builder',tel:'+916300556301',email:'sriramojunikhil66@gmail.com',urls:['https://github.com/Nikhil-creat','https://in.linkedin.com/in/nikhil-chary-sriramoju-95041b38a']};
-const saveContact=()=>{saveBlob(new Blob([vcard(CARD)],{type:'text/vcard'}),'Nikhil-Chary-Sriramoju.vcf');toast('Contact card downloaded')};
+const CARD={first:'NIKHIL CHARY',last:'SRIRAMOJU',title:'B.Tech CSE (final year), AI systems builder',tel:'+916300556301',email:'sriramojunikhil66@gmail.com',urls:['https://github.com/Nikhil-creat','https://in.linkedin.com/in/nikhil-chary-sriramoju-95041b38a']};
+const saveContact=()=>{saveBlob(new Blob([vcard(CARD)],{type:'text/vcard'}),'NIKHIL-CHARY-SRIRAMOJU.vcf');toast('Contact card downloaded')};
 $('#vcf').onclick=saveContact;$('#vcf2').onclick=saveContact;
 $('#qr').onclick=guard(async()=>{await loadScript(CDN.qr);const q=qrcode(0,'L');q.addData(vcard(CARD));q.make();$('#qrimg').src=q.createDataURL(5);$('#qrm').classList.add('on')});
 $('#qrclose').onclick=()=>$('#qrm').classList.remove('on');$('#qrm').onclick=e=>{if(e.target.id==='qrm')$('#qrm').classList.remove('on')};
