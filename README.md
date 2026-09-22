@@ -3,9 +3,8 @@
 # Aether AI Screenshot Studio
 **Autonomous, private, self-healing screenshot intelligence.**
 
-Designed & built by **[NIKHIL CHARY SRIRAMOJU](https://github.com/Nikhil-creat)**
-[GitHub](https://github.com/Nikhil-creat) · [LinkedIn](https://in.linkedin.com/in/nikhil-chary-sriramoju-95041b38a) · [sriramojunikhil66@gmail.com](mailto:sriramojunikhil66@gmail.com) Instagram: [@nikhil__sriramoju](https://www.instagram.com/nikhil__sriramoju)
-- Facebook: [Profile](https://www.facebook.com/profile.php?id=100079201124141)
+Designed & built by **[Nikhil Chary Sriramoju](https://github.com/Nikhil-creat)**
+[GitHub](https://github.com/Nikhil-creat) · [LinkedIn](https://in.linkedin.com/in/nikhil-chary-sriramoju-95041b38a) · [sriramojunikhil66@gmail.com](mailto:sriramojunikhil66@gmail.com) · +91 6300556301
 
 </div>
 
@@ -21,6 +20,9 @@ cd backend && python -m tests.test_core
 ```
 Enable the ML tier with `docker compose build --build-arg WITH_ML=1` (or `pip install -r requirements-ml.txt`) and set `AETHER_WEIGHTS` once you have trained weights.
 
+## Live editor (index.html)
+Open `index.html` (or the GitHub Pages link). It edits **PDF, PNG, JPG, WebP, GIF, BMP, AVIF, SVG, HEIC, TIFF** and saved project files, entirely in the browser, and exports **PNG, JPG, WebP, PDF, SVG or a project file**. Highlights: text replacement that copies the original colour, weight, size, edge softness and (for PDFs, exactly; for images, by OCR + font fingerprinting) the font; smart erase that rebuilds gradients and film grain; on-device OCR text editing; private-info detection and redaction; translation to 30 languages (Chrome's on-device Translator when present); WCAG AAA audit and fixes; dark-mode variant; colour-blindness preview; crop, extend, multi-page PDFs, voice/typed commands, code export. New: real vector-editable PDF export (strip the original glyphs from the PDF's own content stream, redraw the replacement in a matched standard font, keep every path/image untouched — proven against real pdf-lib and poppler, not just rasterised) for pages you only text-edited; a per-page eligibility panel in the Export tab shows which pages qualify and why; batch "translate all pages" and "redact all pages"; keyboard shortcuts (1-7 tools, [ ] pages, Ctrl+E export). Tests: `node tests-web/test_core.js && node tests-web/flow_test.js && node tests-web/cine_test.js && node tests-web/pdf_export_test.js` (the last one needs `pdf-lib` installed locally and `qpdf`/`pdftotext` on PATH).
+
 ## What it does
 Upload a screenshot -> detect layers (text, buttons, cards, images, icons) -> extract palettes/gradients/shadows -> match fonts & tokens via RAG -> edit (smart erase, outpaint, text replace, translate to 50+ languages, dark mode) with a **self-healing render loop** -> audit accessibility (WCAG AAA, colour-blindness sim) -> export **React/Tailwind, HTML/CSS, Vue, SwiftUI, Flutter, Compose, Figma JSON** -> collaborate live (Yjs CRDT, cursors, branches). Natural-language and voice commands drive all of it; every step lands in a live audit log.
 
@@ -35,17 +37,4 @@ See `docs/ARCHITECTURE.md` for the sequence diagram, feature map and API.
 `backend/app` — `main.py` API · `engine.py` · `cv/` · `rag/` · `agents/graph.py` · `services/` · `collab/` · `auth.py` · `branding.py`
 `frontend` — Next.js 14 App Router studio UI · `demo/` — offline demo (GitHub Pages ready)
 
-
-## Author
-
-**NIKHIL CHARY SRIRAMOJU**
-BTech CSE (Final Year)
-
-- GitHub: [Nikhil-creat](https://github.com/Nikhil-creat)
-- LinkedIn: [nikhil-chary-sriramoju](https://in.linkedin.com/in/nikhil-chary-sriramoju-95041b38a)
-- Email: sriramojunikhil66@gmail.com
-- Instagram: [@nikhil__sriramoju](https://www.instagram.com/nikhil__sriramoju)
-- Facebook: [Profile](https://www.facebook.com/profile.php?id=100079201124141)
-
-
-© NIKHIL CHARY SRIRAMOJU 
+© Nikhil Chary Sriramoju

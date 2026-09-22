@@ -20,3 +20,14 @@ jobs:
       - run: node tests-web/test_core.js
       - run: node tests-web/flow_test.js
       - run: node tests-web/cine_test.js
+      - run: npm i --no-save pdf-lib@1.17.1
+      - run: node tests-web/pdf_export_test.js
+  demo-pages:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    permissions: { pages: write, id-token: write }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: demo }
+      - uses: actions/deploy-pages@v4

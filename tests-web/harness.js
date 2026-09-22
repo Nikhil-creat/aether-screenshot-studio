@@ -23,7 +23,8 @@ class El{constructor(id){this.id=id;this.style={};this.children=[];this.dataset=
   async fire(t,ev){for(const f of this.listeners[t]||[])await f(ev)}
   appendChild(c){this.children.push(c);return c}append(...c){this.children.push(...c)}remove(){}setAttribute(){}querySelector(){return null}focus(){}select(){}scrollIntoView(){}setPointerCapture(){}
   getBoundingClientRect(){return{left:0,top:0,width:this._w,height:this._h}}click(){return this.onclick&&this.onclick({stopPropagation(){}})}
-  getContext(){return this._ctx||(this._ctx=new Ctx(this))}toDataURL(){return 'data:image/png;base64,AAAA'}toBlob(cb){cb(new Blob(['x']))}}
+  getContext(){return this._ctx||(this._ctx=new Ctx(this))}toDataURL(){return 'data:image/png;base64,AAAA'}
+  toBlob(cb,type){if((type||'image/png').includes('png'))cb(new Blob([Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=','base64')]));else cb(new Blob(['x']))}}
 const reg={};const ids=s=>reg[s]||(reg[s]=new El(s));
 const tabs=['edit','text','adjust','a11y','dna','code','export'].map(p=>{const e=new El('tab-'+p);e.dataset.p=p;return e});
 document={querySelector:s=>ids(s),querySelectorAll:s=>s==='.tab'?tabs:s==='.tool'?['move','text','replace','erase','redact','crop','extend','pick'].map(t=>{const e=new El('t');e.dataset.t=t;return e}):[],
@@ -37,6 +38,7 @@ globalThis.window.jspdf={jsPDF:class{constructor(o){this.o=o;this.pages=1;this.i
 globalThis.pdfjsLib=undefined;
 const src=script+`
 ;globalThis.__T={startSession,doReplace,eraseRect,analyzeRect,commit,undo,redo,render,setTool,renderSnap,svgOf,doExport,detect,applyLines,scanPII,translatePage,findPdfLine,cropTo,extend,runCmd,scanPII,redactRect,goPage,
- get objs(){return objs},get pages(){return pages},get cur(){return cur},base,bx,ov,P,makeSample,syncPanel,renderA11y,renderCode,saveBlobSpy:(f)=>{saveBlob=f}};`;
+ get objs(){return objs},get pages(){return pages},get cur(){return cur},base,bx,ov,P,makeSample,syncPanel,renderA11y,renderCode,saveBlobSpy:(f)=>{saveBlob=f},
+ renderEligibility,translateAll,scanPIIAll};`;
 (0,eval)(src);
 globalThis.__saved=saved;globalThis.__ids=ids;globalThis.__El=El;globalThis.__pdf=()=>ajs;

@@ -259,10 +259,10 @@ h2.sec{position:relative;padding-bottom:12px}h2.sec:after{content:"";position:ab
         <div id="linesOut"></div>
         <div class="row" id="lineAct" style="display:none"><button class="btn" id="applyAll">Apply all changes</button></div>
         <label class="f">Privacy</label>
-        <div class="row"><button class="btn" id="pii">Find private info</button><select id="redMode" style="width:auto"><option value="pix">Pixelate</option><option value="blk">Black bar</option></select></div>
+        <div class="row"><button class="btn" id="pii">Find private info</button><select id="redMode" style="width:auto"><option value="pix">Pixelate</option><option value="blk">Black bar</option></select><label class="row dim" style="font-size:12.5px"><input type="checkbox" id="piiall"> All pages</label></div>
         <div id="piiOut"></div>
-        <label class="f">Translate this page</label>
-        <div class="row"><select id="tlang" class="grow"></select><button class="btn" id="tgo">Translate</button></div>
+        <label class="f">Translate <span id="tscope">this page</span></label>
+        <div class="row"><select id="tlang" class="grow"></select><button class="btn" id="tgo">Translate</button><label class="row dim" style="font-size:12.5px"><input type="checkbox" id="tall"> All pages</label></div>
         <p class="hint" id="tHint"></p>
       </div>
 
@@ -294,12 +294,13 @@ h2.sec{position:relative;padding-bottom:12px}h2.sec:after{content:"";position:ab
 
       <div class="pane" id="p-export">
         <label class="f" for="xf">Format</label>
-        <select id="xf"><option value="png">PNG (lossless)</option><option value="jpg">JPG</option><option value="webp">WebP</option><option value="pdf">PDF</option><option value="svg">SVG (live text)</option><option value="json">Project file (keep editing later)</option></select>
+        <select id="xf"><option value="png">PNG (lossless)</option><option value="jpg">JPG</option><option value="webp">WebP</option><option value="pdf">PDF (flattened, searchable)</option><option value="pdfvec">PDF (real editable text)</option><option value="svg">SVG (live text)</option><option value="json">Project file (keep editing later)</option></select>
         <label class="f" for="xq">Quality <span id="xqv" class="dim">92</span></label><input type="range" id="xq" min="40" max="100" value="92">
         <label class="f" for="xs">Pages</label><select id="xs"><option value="one">This page</option><option value="all">All pages</option></select>
-        <div class="row" style="margin-top:8px"><label class="row dim" style="font-size:12.5px"><input type="checkbox" id="xt" checked> Searchable text in PDF</label><label class="row dim" style="font-size:12.5px"><input type="checkbox" id="xl"> Lossless PDF</label></div>
+        <div class="row" style="margin-top:8px" id="xtRow"><label class="row dim" style="font-size:12.5px"><input type="checkbox" id="xt" checked> Searchable text in PDF</label><label class="row dim" style="font-size:12.5px"><input type="checkbox" id="xl"> Lossless PDF</label></div>
+        <div id="pageElig" style="margin:10px 0"></div>
         <div class="row" style="margin-top:12px"><button class="btn pri" id="xgo">Export</button><button class="btn" id="xshare">Share</button></div>
-        <p class="hint" style="margin-top:10px">Exports contain no EXIF or GPS metadata. A PDF is exported as a flattened picture of each page, plus an invisible text layer so it stays searchable.</p>
+        <p class="hint" id="xhint" style="margin-top:10px">Exports contain no EXIF or GPS metadata. A PDF is exported as a flattened picture of each page, plus an invisible text layer so it stays searchable.</p>
       </div>
     </div>
   </div>
@@ -491,13 +492,101 @@ function groupItems(items){
   for(const it of its){
     const L=lines.find(l=>Math.abs(l.baseline-it.baseline)<Math.max(2,.3*l.size)&&it.x>=l.x1-1&&it.x-l.x1<Math.max(.6*l.size,8));
     if(L){const gap=it.x-L.x1;L.text+=(gap>.12*L.size&&!L.text.endsWith(' ')&&!it.str.startsWith(' ')?' ':'')+it.str;L.x1=it.x+it.w;if(it.str.length>L.longest){L.longest=it.str.length;L.pdf=it.m;L.size=Math.max(L.size,it.size)}}
-    else lines.push({text:it.str,x0:it.x,x1:it.x+it.w,baseline:it.baseline,size:it.size,longest:it.str.length,pdf:it.m});
+    else lines.push({text:it.str,x0:it.x,x1:it.x+it.w,baseline:it.baseline,size:it.size,longest:it.str.length,pdf:it.m,pdfX:it.px,pdfY:it.py});
   }
   lines.forEach(l=>{l.y0=l.baseline-l.size*.86;l.y1=l.baseline+l.size*.24});
   return lines.filter(l=>l.text.trim());
 }
 function vcard(a){
   return ['BEGIN:VCARD','VERSION:3.0','N:'+a.last+';'+a.first+';;;','FN:'+a.first+' '+a.last,'TITLE:'+a.title,'TEL;TYPE=CELL:'+a.tel,'EMAIL:'+a.email,...a.urls.map(u=>'URL:'+u),'END:VCARD'].join('\r\n');
+}
+
+// ---------- real PDF text editing helpers (pure, tested against real PDF content streams) ----------
+// Tokenises a PDF content stream (treated as Latin-1) and blanks the strings of text-show operators whose start point
+// matches one of `starts` (PDF user space, points). Later show ops chained on the same line (no repositioning) go with it.
+// Blanking is layout-safe: the next positioned text starts from Td/Tm, which never depends on glyph advances.
+function pdfStripText(src,starts,tol){
+  tol=tol||.9;const n=src.length,toks=[];let i=0;
+  const WS=c=>c===' '||c==='\n'||c==='\r'||c==='\t'||c==='\f'||c==='\0',DL='()<>[]{}/%';
+  const isNum=t=>/^[+-]?(\d+\.?\d*|\.\d+)$/.test(t);
+  function readStr(){let d=0,j=i;do{const c=src[j];if(c==='\\')j++;else if(c==='(')d++;else if(c===')')d--;j++}while(d>0&&j<n);return j}
+  function readArr(){const kids=[];const s=i;i++;while(i<n){const c=src[i];if(WS(c)){i++;continue}if(c===']'){i++;return{t:'arr',s,e:i,kids}}
+      if(c==='('){const e=readStr();kids.push({t:'str',s:i,e});i=e}else if(c==='<'&&src[i+1]!=='<'){const e=src.indexOf('>',i)+1||n;kids.push({t:'hex',s:i,e});i=e}else{let j=i;while(j<n&&!WS(src[j])&&!DL.includes(src[j]))j++;if(j===i)j=i+1;kids.push({t:'num',s:i,e:j,v:parseFloat(src.slice(i,j))});i=j}}
+    return{t:'arr',s,e:n,kids}}
+  while(i<n){
+    const c=src[i];if(WS(c)){i++;continue}
+    if(c==='%'){while(i<n&&src[i]!=='\n'&&src[i]!=='\r')i++;continue}
+    if(c==='('){const e=readStr();toks.push({t:'str',s:i,e});i=e;continue}
+    if(c==='['){toks.push(readArr());continue}
+    if(c==='<'){if(src[i+1]==='<'){toks.push({t:'dict',s:i,e:i+2});i+=2}else{const e=src.indexOf('>',i)+1||n;toks.push({t:'hex',s:i,e});i=e}continue}
+    if(c==='>'){toks.push({t:'dict',s:i,e:src[i+1]==='>'?i+2:i+1});i+=src[i+1]==='>'?2:1;continue}
+    if(c==='/'){let j=i+1;while(j<n&&!WS(src[j])&&!DL.includes(src[j]))j++;toks.push({t:'name',s:i,e:j,v:src.slice(i+1,j)});i=j;continue}
+    if(c===']'||c==='{'||c==='}'||c===')'){i++;continue}
+    let j=i;while(j<n&&!WS(src[j])&&!DL.includes(src[j]))j++;const w=src.slice(i,j);
+    if(isNum(w))toks.push({t:'num',s:i,e:j,v:parseFloat(w)});else{toks.push({t:'op',s:i,e:j,v:w});
+      if(w==='ID'){const m=/[\s]EI(?=[\s]|$)/g;m.lastIndex=j;const r=m.exec(src);i=r?r.index+r[0].length:n;toks.push({t:'op',s:j,e:i,v:'EI'});continue}}
+    i=j;
+  }
+  const mul=(m,k)=>[m[0]*k[0]+m[1]*k[2],m[0]*k[1]+m[1]*k[3],m[2]*k[0]+m[3]*k[2],m[2]*k[1]+m[3]*k[3],m[4]*k[0]+m[5]*k[2]+k[4],m[4]*k[1]+m[5]*k[3]+k[5]];
+  let ctm=[1,0,0,1,0,0],stack=[],tm=[1,0,0,1,0,0],tlm=[1,0,0,1,0,0],lead=0,rise=0,chain=false,args=[];const edits=[];let matched=0;
+  const startPt=()=>{const x=rise*tm[2]+tm[4],y=rise*tm[3]+tm[5];return[x*ctm[0]+y*ctm[2]+ctm[4],x*ctm[1]+y*ctm[3]+ctm[5]]};
+  const hit=()=>{const p=startPt();return starts.some(s=>Math.abs(s.x-p[0])<=tol&&Math.abs(s.y-p[1])<=tol)};
+  const td=(x,y)=>{tlm=mul([1,0,0,1,x,y],tlm);tm=tlm.slice();chain=false};
+  const blank=a=>{if(a.t==='str')edits.push([a.s,a.e,'()']);else if(a.t==='hex')edits.push([a.s,a.e,'<>']);else if(a.t==='arr')edits.push([a.s,a.e,'[]'])};
+  for(const tk of toks){
+    if(tk.t!=='op'){args.push(tk);continue}
+    const op=tk.v,nums=args.filter(a=>a.t==='num').map(a=>a.v);
+    switch(op){
+      case'q':stack.push(ctm.slice());break;case'Q':if(stack.length)ctm=stack.pop();break;
+      case'cm':if(nums.length>=6)ctm=mul(nums.slice(-6),ctm);break;
+      case'BT':tm=[1,0,0,1,0,0];tlm=[1,0,0,1,0,0];chain=false;break;case'ET':chain=false;break;
+      case'TL':lead=nums[0]||0;break;case'Ts':rise=nums[0]||0;break;
+      case'Td':td(nums[0]||0,nums[1]||0);break;case'TD':lead=-(nums[1]||0);td(nums[0]||0,nums[1]||0);break;
+      case'Tm':if(nums.length>=6){tm=nums.slice(-6);tlm=tm.slice()}chain=false;break;
+      case'T*':td(0,-lead);break;
+      case'Tj':case'TJ':{const a=args[args.length-1];if(a&&(chain||hit())){chain=true;matched++;blank(a)}break}
+      case"'":{td(0,-lead);const a=args[args.length-1];if(a&&hit()){chain=true;matched++;blank(a)}break}
+      case'"':{td(0,-lead);const a=args[args.length-1];if(a&&hit()){chain=true;matched++;blank(a)}break}
+    }
+    args=[];
+  }
+  if(!edits.length)return{out:src,matched:0};
+  edits.sort((a,b)=>a[0]-b[0]);let out='',pos=0;for(const[s,e,r]of edits){out+=src.slice(pos,s)+r;pos=e}out+=src.slice(pos);
+  return{out,matched};
+}
+// Which pixels of an edited page differ from the original render? Returns tight boxes (x1,y1 exclusive) and the changed-area fraction.
+function changedPatches(a,b,w,h,cell,merge){
+  cell=cell||8;merge=merge==null?6:merge;const cw=Math.ceil(w/cell),ch=Math.ceil(h/cell),flag=new Uint8Array(cw*ch);let px=0;
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++){const i=(y*w+x)*4;if(Math.abs(a[i]-b[i])+Math.abs(a[i+1]-b[i+1])+Math.abs(a[i+2]-b[i+2])>12||Math.abs(a[i+3]-b[i+3])>8){flag[((y/cell)|0)*cw+((x/cell)|0)]=1;px++}}
+  const seen=new Uint8Array(cw*ch),boxes=[];
+  for(let s=0;s<cw*ch;s++){if(!flag[s]||seen[s])continue;const q=[s];seen[s]=1;let x0=1e9,y0=1e9,x1=-1,y1=-1;
+    while(q.length){const c=q.pop(),cx=c%cw,cy=(c/cw)|0;
+      for(let y=cy*cell;y<Math.min(h,cy*cell+cell);y++)for(let x=cx*cell;x<Math.min(w,cx*cell+cell);x++){const i=(y*w+x)*4;if(Math.abs(a[i]-b[i])+Math.abs(a[i+1]-b[i+1])+Math.abs(a[i+2]-b[i+2])>12||Math.abs(a[i+3]-b[i+3])>8){if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y}}
+      for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const nx=cx+dx,ny=cy+dy;if(nx<0||ny<0||nx>=cw||ny>=ch)continue;const k=ny*cw+nx;if(flag[k]&&!seen[k]){seen[k]=1;q.push(k)}}}
+    boxes.push({x0,y0,x1:x1+1,y1:y1+1})}
+  let again=true;while(again){again=false;for(let i=0;i<boxes.length&&!again;i++)for(let j=i+1;j<boxes.length;j++){const A=boxes[i],B=boxes[j];
+      if(A.x0-merge<B.x1&&B.x0-merge<A.x1&&A.y0-merge<B.y1&&B.y0-merge<A.y1){boxes[i]={x0:Math.min(A.x0,B.x0),y0:Math.min(A.y0,B.y0),x1:Math.max(A.x1,B.x1),y1:Math.max(A.y1,B.y1)};boxes.splice(j,1);again=true;break}}}
+  return{boxes,frac:px/(w*h)};
+}
+// canvas -> PDF user space affine from pdf.js viewport samples: o=(0,0), x=(1,0), y=(0,1) already converted with convertToPdfPoint
+function affFromPoints(o,x,y){return[x[0]-o[0],x[1]-o[1],y[0]-o[0],y[1]-o[1],o[0],o[1]]}
+const applyAff=(f,x,y)=>[f[0]*x+f[2]*y+f[4],f[1]*x+f[3]*y+f[5]];
+const affUnrotated=f=>Math.abs(f[1])<1e-6&&Math.abs(f[2])<1e-6&&f[0]>0&&f[3]<0;
+// map a text object's CSS font stack + weight to something embeddable in a PDF
+const WEBFONTS={'roboto':'roboto','open sans':'open-sans','lato':'lato','montserrat':'montserrat','poppins':'poppins','inter':'inter','nunito':'nunito','dm sans':'dm-sans','work sans':'work-sans','space grotesk':'space-grotesk','playfair display':'playfair-display','merriweather':'merriweather','lora':'lora','jetbrains mono':'jetbrains-mono'};
+function pickPdfFont(css,weight,italic){
+  const first=(css||'').split(',')[0].replace(/["']/g,'').trim().toLowerCase(),bold=+weight>=600,all=(css||'').toLowerCase();
+  if(WEBFONTS[first])return{kind:'web',id:WEBFONTS[first],bold,italic:!!italic,name:first};
+  let base='Helvetica';
+  if(/courier|mono|consolas|menlo/.test(first)||(/monospace/.test(all)&&!/sans|serif/.test(first)&&first===''))base='Courier';
+  else if(/times|georgia|garamond|palatino|cambria|serif/.test(first)&&!/sans/.test(first))base='Times';
+  else if(first==='system-ui'||first==='-apple-system'||/arial|helvet|calibri|carlito|segoe|sans/.test(first)){base='Helvetica'}
+  else if(/serif/.test(all)&&!/sans/.test(all))base='Times';
+  return{kind:'std',base,bold,italic:!!italic,name:stdFontName(base,bold,!!italic)};
+}
+function stdFontName(base,bold,italic){
+  if(base==='Times')return bold&&italic?'Times-BoldItalic':bold?'Times-Bold':italic?'Times-Italic':'Times-Roman';
+  const b=base==='Courier'?'Courier':'Helvetica';return bold&&italic?b+'-BoldOblique':bold?b+'-Bold':italic?b+'-Oblique':b;
 }
 //</core>
 
@@ -510,7 +599,7 @@ const base=$('#base'),ov=$('#ov'),bx=base.getContext('2d',{willReadFrequently:tr
 let pages=[],cur=0,objs=[],sel=-1,tool='move',drag=null,rect=null,cvdMode='',hl=null,uid=0,cmpOn=false;
 const MAXW=1080,MAXH=8,DEF_FAM='system-ui,-apple-system,"Segoe UI",Roboto,sans-serif';
 const CDN={pdf:'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',pdfw:'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js',
-  jspdf:'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',tess:'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js',
+  jspdf:'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',pdflib:'https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js',tess:'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js',
   heic:'https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js',utif:'https://cdn.jsdelivr.net/npm/utif@3.1.0/UTIF.js',qr:'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js'};
 const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 const toast=m=>{const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.remove('on'),2200)};
@@ -534,14 +623,16 @@ async function heicPages(f){await loadScript(CDN.heic);const out=await heic2any(
 async function tiffPages(f){await loadScript(CDN.utif);const buf=await f.arrayBuffer(),ifds=UTIF.decode(buf),out=[];for(const ifd of ifds.slice(0,30)){UTIF.decodeImage(buf,ifd);const rgba=UTIF.toRGBA8(ifd),c0=document.createElement('canvas');c0.width=ifd.width;c0.height=ifd.height;c0.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(rgba),ifd.width,ifd.height),0,0);out.push({canvas:scaledCanvas(c0,ifd.width,ifd.height),name:f.name})}return out}
 async function pdfPages(f){
   await loadScript(CDN.pdf);pdfjsLib.GlobalWorkerOptions.workerSrc=CDN.pdfw;
-  const doc=await pdfjsLib.getDocument({data:await f.arrayBuffer()}).promise,n=Math.min(doc.numPages,30),out=[];if(doc.numPages>30)toast('Opened the first 30 pages');
+  const rawBytes=await f.arrayBuffer();
+  const doc=await pdfjsLib.getDocument({data:rawBytes.slice(0)}).promise,n=Math.min(doc.numPages,30),out=[];if(doc.numPages>30)toast('Opened the first 30 pages');
   for(let p=1;p<=n;p++){
     setBusy(`Rendering PDF page ${p} of ${n}`);const page=await doc.getPage(p),v1=page.getViewport({scale:1}),sc=Math.min(3,MAXW/v1.width),vp=page.getViewport({scale:sc});
     const c=document.createElement('canvas');c.width=Math.round(vp.width);c.height=Math.round(vp.height);const g=c.getContext('2d',{willReadFrequently:true});g.fillStyle='#fff';g.fillRect(0,0,c.width,c.height);
     await page.render({canvasContext:g,viewport:vp}).promise;
     let items=[];try{const tc=await page.getTextContent();items=tc.items.filter(it=>it.str&&it.str.trim()).map(it=>{const t=pdfjsLib.Util.transform(vp.transform,it.transform),size=Math.hypot(t[2],t[3]);let real='';try{real=page.commonObjs.get(it.fontName).name||''}catch(e){}
-      return{str:it.str,x:t[4],baseline:t[5],w:it.width*vp.scale,size,rot:Math.abs(t[1])>size*.05,m:mapPdfFont(real,(tc.styles[it.fontName]||{}).fontFamily||'')}}).filter(i=>!i.rot&&i.size>3)}catch(e){}
-    out.push({canvas:c,name:`${f.name} p${p}`,items,pdfSize:[v1.width,v1.height]});
+      let px=null,py=null;try{const inv=pdfjsLib.Util.applyInverseTransform(vp.transform,[t[4],t[5]]);px=inv[0];py=inv[1]}catch(e){}
+      return{str:it.str,x:t[4],baseline:t[5],w:it.width*vp.scale,size,rot:Math.abs(t[1])>size*.05,m:mapPdfFont(real,(tc.styles[it.fontName]||{}).fontFamily||''),px,py}}).filter(i=>!i.rot&&i.size>3)}catch(e){}
+    out.push({canvas:c,name:`${f.name} p${p}`,items,pdfSize:[v1.width,v1.height],pdfBytes:rawBytes,srcPageIndex:p-1,vpScale:sc});
   }
   setBusy(null);return out;
 }
@@ -562,7 +653,8 @@ async function openFiles(files){
 }
 const thumbOf=c=>{const s=72/c.width,t=document.createElement('canvas');t.width=72;t.height=Math.max(1,Math.round(c.height*s));t.getContext('2d').drawImage(c,0,0,t.width,t.height);return t.toDataURL('image/jpeg',.6)};
 function startSession(list){
-  pages=list.map(p=>{const c=p.canvas,img=c.getContext('2d').getImageData(0,0,c.width,c.height);return{hist:[{img,w:c.width,h:c.height,o:p.o||'[]',ln:p.ln||'null'}],redo:[],name:p.name,items:p.items||null,pdfSize:p.pdfSize||null,lines:null,thumb:thumbOf(c),fp:undefined}});
+  pages=list.map(p=>{const c=p.canvas,img=c.getContext('2d').getImageData(0,0,c.width,c.height);return{hist:[{img,w:c.width,h:c.height,o:p.o||'[]',ln:p.ln||'null'}],redo:[],name:p.name,items:p.items||null,pdfSize:p.pdfSize||null,lines:null,thumb:thumbOf(c),fp:undefined,
+    pdfBytes:p.pdfBytes||null,srcPageIndex:p.srcPageIndex,vpScale:p.vpScale||1,rasterDirty:false,vectorBroken:false}});
   $('#studioBox').classList.add('on');goPage(0,true);setTool('move');
   $('#studio').scrollIntoView({behavior:'smooth',block:'start'});
   toast(pages.length>1?`${pages.length} pages opened`:'Ready to edit');
@@ -611,7 +703,7 @@ function eraseRect(r,pad=2){const q=region({x0:r.x0-pad,y0:r.y0-pad,x1:r.x1+pad,
   coonsFill(q.img.data,q.w,q.h,q.b.x0-q.X,q.b.y0-q.Y,q.b.x1-q.X,q.b.y1-q.Y,s);bx.putImageData(q.img,q.X,q.Y)}
 function analyzeRect(r){const q=region(r,6);if(q.b.w<2||q.b.h<2)return null;const a=inkAnalyze(q.img.data,q.w,q.h,q.b.x0-q.X,q.b.y0-q.Y,q.b.x1-q.X,q.b.y1-q.Y);if(!a)return null;a.box={x0:a.box.x0+q.X,y0:a.box.y0+q.Y,x1:a.box.x1+q.X,y1:a.box.y1+q.Y};return a}
 function redactRect(r,mode){const q=region(r,0);if(mode==='blk'){bx.fillStyle='#000';bx.fillRect(q.b.x0,q.b.y0,q.b.w,q.b.h)}else{const b=Math.max(6,Math.round(q.b.h/2.2));pixelate(q.img.data,q.w,q.h,q.b.x0-q.X,q.b.y0-q.Y,q.b.x1-q.X,q.b.y1-q.Y,b);bx.putImageData(q.img,q.X,q.Y)}}
-function cropTo(r){const b=clampBox(r.x0,r.y0,r.x1,r.y1),part=bx.getImageData(b.x0,b.y0,b.w,b.h);base.width=ov.width=b.w;base.height=ov.height=b.h;bx.putImageData(part,0,0);objs.forEach(o=>{o.x-=b.x0;o.y-=b.y0});sel=-1;const p=P();p.lines=null;p.items=null;render();syncPanel();renderLines()}
+function cropTo(r){const b=clampBox(r.x0,r.y0,r.x1,r.y1),part=bx.getImageData(b.x0,b.y0,b.w,b.h);base.width=ov.width=b.w;base.height=ov.height=b.h;bx.putImageData(part,0,0);objs.forEach(o=>{o.x-=b.x0;o.y-=b.y0});sel=-1;const p=P();p.lines=null;p.items=null;p.vectorBroken=true;render();syncPanel();renderLines()}
 function extend(n){
   const W=base.width,H=base.height,nw=W+2*n,nh=H+2*n,src=document.createElement('canvas');src.width=W;src.height=H;src.getContext('2d').drawImage(base,0,0);
   const big=document.createElement('canvas');big.width=nw;big.height=nh;const g=big.getContext('2d');
@@ -623,7 +715,7 @@ function extend(n){
   g.save();g.globalAlpha=.4;g.translate(0,n);g.scale(1,-1);g.drawImage(src,n,0,W,Math.min(n,H),n,-n,W,Math.min(n,H));g.restore();
   g.drawImage(src,n,n);
   base.width=ov.width=nw;base.height=ov.height=nh;bx.drawImage(big,0,0);objs.forEach(o=>{o.x+=n;o.y+=n});
-  const p=P();if(p.lines)p.lines.forEach(l=>{l.x0+=n;l.x1+=n;l.y0+=n;l.y1+=n;if(l.baseline!=null)l.baseline+=n});p.items=null;render();commit();toast('Canvas extended')
+  const p=P();if(p.lines)p.lines.forEach(l=>{l.x0+=n;l.x1+=n;l.y0+=n;l.y1+=n;if(l.baseline!=null)l.baseline+=n});p.items=null;p.vectorBroken=true;render();commit();toast('Canvas extended')
 }
 const bake=fn=>{const t=document.createElement('canvas');t.width=base.width;t.height=base.height;fn(t.getContext('2d'));bx.clearRect(0,0,base.width,base.height);bx.drawImage(t,0,0)};
 
@@ -652,7 +744,9 @@ function replaceCore(r,newText,L,opt={}){
   if(!opt.align&&rw-bw>.25*rw&&Math.abs((box.x0+box.x1)/2-(r.x0+r.x1)/2)<.06*rw)align='center';
   const maxW=opt.maxW||Math.max(bw*1.1,rw*.98);
   const o=makeObj(newText,style,(L&&L.pdf)?{x0:L.x0,x1:L.x1,y0:box.y0,y1:box.y1}:box,align,maxW);
-  o.src={box:{x0:box.x0,y0:box.y0,x1:box.x1,y1:box.y1},text:(L&&L.text)||null};objs.push(o);sel=objs.length-1;return o;
+  o.src={box:{x0:box.x0,y0:box.y0,x1:box.x1,y1:box.y1},text:(L&&L.text)||null};
+  if(L&&L.pdfX!=null)o.pdfPt={x:L.pdfX,y:L.pdfY};
+  objs.push(o);sel=objs.length-1;return o;
 }
 const rectOf=L=>({x0:L.x0-1,y0:L.y0-1,x1:L.x1+1,y1:L.y1+1});
 
@@ -727,8 +821,8 @@ ov.addEventListener('pointermove',e=>{const p=pos(e);if(drag&&sel>=0){objs[sel].
 ov.addEventListener('pointerup',guard(async()=>{
   if(drag){if(drag.moved)commit();drag=null;return}
   if(!rect)return;const r=normRect(rect);rect=null;if(r.x1-r.x0<6||r.y1-r.y0<6){render();return}
-  if(tool==='erase'){eraseRect(r);commit();render();toast('Erased')}
-  else if(tool==='redact'){redactRect(r,$('#redMode').value);commit();render();toast('Redacted')}
+  if(tool==='erase'){eraseRect(r);if(P().pdfBytes)P().vectorBroken=true;commit();render();toast('Erased')}
+  else if(tool==='redact'){redactRect(r,$('#redMode').value);if(P().pdfBytes)P().vectorBroken=true;commit();render();toast('Redacted')}
   else if(tool==='replace')doReplace(r,($('#rep')&&$('#rep').value)||'New text');
   else if(tool==='crop'){cropTo(r);commit();setTool('move')}
 }));
@@ -785,9 +879,18 @@ const scanPII=guard(async()=>{
   if(!flagged.length){out.innerHTML='<p class="hint ok">Nothing that looks like private information was found. OCR can miss things, so glance over it yourself.</p>';return}
   flagged.forEach(x=>{const d=document.createElement('div');d.style.margin='6px 0';x.k.forEach(k=>{const s=document.createElement('span');s.className='pii';s.textContent=k;d.appendChild(s)});const t=document.createElement('span');t.className='dim';t.textContent=x.l.text.slice(0,40);d.appendChild(t);out.appendChild(d)});
   const b=document.createElement('button');b.className='btn pri';b.textContent=`Redact ${flagged.length} line${flagged.length>1?'s':''}`;
-  b.onclick=()=>{flagged.forEach(x=>redactRect({x0:x.l.x0-2,y0:x.l.y0-2,x1:x.l.x1+2,y1:x.l.y1+2},$('#redMode').value));p.lines=p.lines.filter(l=>!flagged.some(x=>x.l===l));commit();render();renderLines();out.innerHTML='<p class="hint ok">Redacted. Export removes metadata too.</p>'};out.appendChild(b);
+  b.onclick=()=>{flagged.forEach(x=>redactRect({x0:x.l.x0-2,y0:x.l.y0-2,x1:x.l.x1+2,y1:x.l.y1+2},$('#redMode').value));if(P().pdfBytes)P().vectorBroken=true;p.lines=p.lines.filter(l=>!flagged.some(x=>x.l===l));commit();render();renderLines();out.innerHTML='<p class="hint ok">Redacted. Export removes metadata too.</p>'};out.appendChild(b);
 });
-$('#pii').onclick=scanPII;
+const scanPIIAll=guard(async()=>{
+  const start=cur;let total=0;
+  for(let i=0;i<pages.length;i++){goPage(i);await detect();const p=P();if(!p.lines)continue;
+    const flagged=p.lines.map(l=>({l,k:piiKinds(l.text)})).filter(x=>x.k.length);if(!flagged.length)continue;
+    flagged.forEach(x=>redactRect({x0:x.l.x0-2,y0:x.l.y0-2,x1:x.l.x1+2,y1:x.l.y1+2},$('#redMode').value));if(P().pdfBytes)P().vectorBroken=true;
+    p.lines=p.lines.filter(l=>!flagged.some(x=>x.l===l));commit();total+=flagged.length;
+  }
+  goPage(start);render();renderLines();toast(total?`Redacted ${total} line${total>1?'s':''} across ${pages.length} pages`:'Nothing that looks private was found on any page');
+});
+$('#pii').onclick=()=>$('#piiall').checked?scanPIIAll():scanPII();
 
 /* ---------- translate (Chrome on-device Translator API when present, UI glossary otherwise) ---------- */
 const RTL={ar:1,he:1,fa:1,ur:1};
@@ -809,17 +912,26 @@ const translatePage=guard(async()=>{
   setBusy('Loading fonts');await loadLangFont(lang,edits.map(e=>e.t).join(''));setBusy(null);
   await applyLines(edits,{lang,align:RTL[lang]?'right':null});
 });
-$('#tgo').onclick=translatePage;
+const translateAll=guard(async()=>{
+  const lang=$('#tlang').value,start=cur;let n=0;await loadLangFont(lang,'sample text');
+  for(let i=0;i<pages.length;i++){goPage(i);const p=P();if(!p.lines)await detect();if(!p.lines||!p.lines.length)continue;
+    const edits=[];for(const L of p.lines){const t=await translateText(L.text,lang);if(t&&t!==L.text)edits.push({L,t})}
+    if(edits.length){await applyLines(edits,{lang,align:RTL[lang]?'right':null});n+=edits.length}
+  }
+  goPage(start);toast(n?`Translated ${n} line${n>1?'s':''} across ${pages.length} pages`:'Nothing could be translated on any page');
+});
+$('#tgo').onclick=()=>$('#tall').checked?translateAll():translatePage();
+$('#tall').onchange=e=>{$('#tscope').textContent=e.target.checked?'every page':'this page'};
 
 /* ---------- adjust ---------- */
 const sliders=['a-b','a-c','a-s','a-bl'];
 const previewFilter=()=>{const [b,c,s,bl]=sliders.map(i=>+$('#'+i).value);base.style.filter=`brightness(${b}%) contrast(${c}%) saturate(${s}%) blur(${bl}px)`};
 sliders.forEach(i=>$('#'+i).oninput=previewFilter);
 $('#a-reset').onclick=()=>{sliders.forEach(i=>$('#'+i).value=i==='a-bl'?0:100);previewFilter()};
-$('#a-apply').onclick=()=>{const [b,c,s,bl]=sliders.map(i=>+$('#'+i).value);if(!('filter'in bx))return toast('This browser cannot bake filters');bake(g=>{g.filter=`brightness(${b}%) contrast(${c}%) saturate(${s}%) blur(${bl}px)`;g.drawImage(base,0,0)});$('#a-reset').onclick();commit();toast('Adjustments applied')};
+$('#a-apply').onclick=()=>{const [b,c,s,bl]=sliders.map(i=>+$('#'+i).value);if(!('filter'in bx))return toast('This browser cannot bake filters');bake(g=>{g.filter=`brightness(${b}%) contrast(${c}%) saturate(${s}%) blur(${bl}px)`;g.drawImage(base,0,0)});if(P().pdfBytes)P().vectorBroken=true;$('#a-reset').onclick();commit();toast('Adjustments applied')};
 function darkBase(){const d=bx.getImageData(0,0,base.width,base.height),a=d.data;for(let i=0;i<a.length;i+=4){const mx=Math.max(a[i],a[i+1],a[i+2]),mn=Math.min(a[i],a[i+1],a[i+2]);a[i]=flipC(a[i],mn,mx);a[i+1]=flipC(a[i+1],mn,mx);a[i+2]=flipC(a[i+2],mn,mx)}bx.putImageData(d,0,0)}
-$('#dark').onclick=()=>{darkBase();objs.forEach(o=>o.c=flipL(o.c.toUpperCase()));render();syncPanel();commit();toast('Dark variant created')};
-$('#invert').onclick=()=>{const d=bx.getImageData(0,0,base.width,base.height),a=d.data;for(let i=0;i<a.length;i+=4){a[i]=255-a[i];a[i+1]=255-a[i+1];a[i+2]=255-a[i+2]}bx.putImageData(d,0,0);commit()};
+$('#dark').onclick=()=>{darkBase();objs.forEach(o=>o.c=flipL(o.c.toUpperCase()));if(P().pdfBytes)P().vectorBroken=true;render();syncPanel();commit();toast('Dark variant created')};
+$('#invert').onclick=()=>{const d=bx.getImageData(0,0,base.width,base.height),a=d.data;for(let i=0;i<a.length;i+=4){a[i]=255-a[i];a[i+1]=255-a[i+1];a[i+2]=255-a[i+2]}bx.putImageData(d,0,0);if(P().pdfBytes)P().vectorBroken=true;commit()};
 $$('#cvd .chip').forEach(b=>b.onclick=()=>{cvdMode=b.dataset.c;$$('#cvd .chip').forEach(x=>x.classList.toggle('on',x===b));$('#cw').style.filter=cvdMode?`url(#f-${cvdMode})`:''});
 
 /* ---------- analysis panels ---------- */
@@ -885,9 +997,54 @@ const doExport=guard(async(fmtOverride)=>{
   }else if(fmt==='json'){
     const proj={v:1,app:'Aether Studio',author:'Nikhil Chary Sriramoju',pages:idx.map(i=>{const s=snap(i),c=renderSnap({...s,o:'[]'},false);return{name:pages[i].name,w:s.w,h:s.h,png:c.toDataURL('image/png'),o:s.o,ln:s.ln,pdfSize:pages[i].pdfSize}})};
     saveBlob(new Blob([JSON.stringify(proj)],{type:'application/json'}),`${name}.aether.json`);
+  }else if(fmt==='pdfvec'){
+    const msg=await exportRealPdf(idx,name,wm);setBusy(null);toast(msg);return;
   }
   setBusy(null);toast('Exported. Metadata removed.');
 });
+
+/* ---------- real, vector-editable PDF export: strip original glyphs, redraw matched text, keep everything else (paths, images) intact ---------- */
+const STDFONT={'Helvetica':'Helvetica','Helvetica-Bold':'HelveticaBold','Helvetica-Oblique':'HelveticaOblique','Helvetica-BoldOblique':'HelveticaBoldOblique',
+  'Times-Roman':'TimesRoman','Times-Bold':'TimesRomanBold','Times-Italic':'TimesRomanItalic','Times-BoldItalic':'TimesRomanBoldItalic',
+  'Courier':'Courier','Courier-Bold':'CourierBold','Courier-Oblique':'CourierOblique','Courier-BoldOblique':'CourierBoldOblique'};
+async function exportRealPdf(idx,name,wm){
+  await loadScript(CDN.pdflib);const PL=window.PDFLib;if(!PL)throw new Error('The PDF engine could not load. Check your connection and try again.');
+  const {PDFDocument,PDFName,PDFArray,PDFRawStream,decodePDFRawStream,StandardFonts,rgb}=PL;
+  const outDoc=await PDFDocument.create(),fcache={};let vec=0,flat=0;
+  const getFont=async std=>fcache[std]||(fcache[std]=await outDoc.embedFont(StandardFonts[STDFONT[std]]));
+  for(const i of idx){
+    const p=pages[i],s=p.hist[p.hist.length-1],pageObjs=JSON.parse(s.o).filter(o=>o.pdfPt);
+    if(p.pdfBytes&&!p.rasterDirty&&!p.vectorBroken){
+      try{
+        const srcDoc=await PDFDocument.load(p.pdfBytes.slice(0)),srcPage=srcDoc.getPage(p.srcPageIndex);
+        if(pageObjs.length){
+          const ctx=srcDoc.context,node=srcPage.node,entry=node.get(PDFName.of('Contents'));
+          const refs=entry instanceof PDFArray?entry.asArray():[entry];
+          const text=refs.map(ref=>Buffer_or_str(decodePDFRawStream(ctx.lookup(ref,PDFRawStream)).decode())).join('\n');
+          const r=pdfStripText(text,pageObjs.map(o=>o.pdfPt));
+          const bytes=strToLatin1Bytes(r.out),newStream=ctx.flateStream(bytes,{});
+          node.set(PDFName.of('Contents'),ctx.register(newStream));
+          for(const o of pageObjs){
+            const picked=pickPdfFont(o.f,+o.w,!!o.it),stdName=picked.kind==='web'?stdFontName(/serif/i.test(o.f)&&!/sans/i.test(o.f)?'Times':/mono/i.test(o.f)?'Courier':'Helvetica',+o.w>=600,!!o.it):picked.name;
+            const font=await getFont(stdName),sizePt=o.s/(p.vpScale||1),lines=String(o.t).split('\n'),[r0,g0,b0]=hex2rgb(o.c.toUpperCase()).map(v=>v/255);
+            lines.forEach((ln,k)=>{if(ln)srcPage.drawText(ln,{x:o.pdfPt.x,y:o.pdfPt.y-k*sizePt*1.2,size:sizePt,font,color:rgb(r0,g0,b0)})});
+          }
+        }
+        const [copied]=await outDoc.copyPages(srcDoc,[p.srcPageIndex]);outDoc.addPage(copied);vec++;
+      }catch(e){console.warn('vector export fell back to flattened for a page:',e);await addFlattenedPage(outDoc,p,s,wm);flat++}
+    }else{await addFlattenedPage(outDoc,p,s,wm);flat++}
+  }
+  outDoc.setTitle(name);outDoc.setAuthor('Nikhil Chary Sriramoju');outDoc.setCreator('Aether AI Screenshot Studio');
+  saveBlob(new Blob([await outDoc.save()],{type:'application/pdf'}),`${name}-editable.pdf`);
+  return flat===0?`Exported ${vec} page${vec>1?'s':''} with real editable text.`:vec===0?`Exported ${flat} page${flat>1?'s':''} as flattened images (no eligible vector text pages).`:`Exported: ${vec} page${vec>1?'s':''} with real editable text, ${flat} flattened (had erase, redact, filters, crop or extend).`;
+}
+async function addFlattenedPage(outDoc,p,s,wm){
+  const c=renderSnap(s,wm,'#ffffff'),wpt=p.pdfSize?p.pdfSize[0]:s.w*.75,hpt=p.pdfSize?p.pdfSize[1]:s.h*.75;
+  const blob=await toBlob(c,'image/png'),png=new Uint8Array(await blob.arrayBuffer());
+  const img=await outDoc.embedPng(png),pg=outDoc.addPage([wpt,hpt]);pg.drawImage(img,{x:0,y:0,width:wpt,height:hpt});
+}
+function strToLatin1Bytes(str){const b=new Uint8Array(str.length);for(let i=0;i<str.length;i++)b[i]=str.charCodeAt(i)&0xff;return b}
+function Buffer_or_str(u8){let s='';for(let i=0;i<u8.length;i++)s+=String.fromCharCode(u8[i]);return s}
 const openProject=guard(async f=>{
   const j=JSON.parse(await f.text());if(!j.pages||!j.pages.length)throw new Error('Not an Aether project file');
   const list=[];for(const p of j.pages){const im=await new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=()=>rej(new Error('Project image is damaged'));i.src=p.png}),c=document.createElement('canvas');c.width=p.w;c.height=p.h;c.getContext('2d',{willReadFrequently:true}).drawImage(im,0,0);list.push({canvas:c,name:p.name,o:p.o,ln:p.ln,pdfSize:p.pdfSize})}
@@ -895,7 +1052,10 @@ const openProject=guard(async f=>{
 });
 const share=guard(async()=>{const s=pages[cur].hist[pages[cur].hist.length-1],b=await toBlob(renderSnap(s,$('#wm').checked,null),'image/png'),f=new File([b],stem()+'-edited.png',{type:'image/png'});
   if(navigator.canShare&&navigator.canShare({files:[f]}))await navigator.share({files:[f],title:'Edited with Aether Studio'});else toast('Sharing files is not supported here. Use Export instead.')});
-$('#xf').onchange=()=>{const f=$('#xf').value;$('#xq').disabled=!(f==='jpg'||f==='webp'||f==='pdf')};$('#xq').oninput=e=>$('#xqv').textContent=e.target.value;
+$('#xf').onchange=()=>{const f=$('#xf').value;$('#xq').disabled=!(f==='jpg'||f==='webp'||f==='pdf');$('#xtRow').style.display=f==='pdf'?'flex':'none';
+  $('#xhint').textContent=f==='pdfvec'?'Real, selectable text — only for PDF pages opened here where you used Replace text or Detect text, with no erase, redact, filter, dark mode or crop/extend on that page. Any other page in the file exports as a flattened image instead. Text you added with the Add text tool on a PDF page is drawn as new text; letter-spacing and blur are not carried over. Fonts are matched to the nearest of Helvetica, Times and Courier, since embedding your exact font needs it to be reachable online.':
+    'Exports contain no EXIF or GPS metadata. A PDF is exported as a flattened picture of each page, plus an invisible text layer so it stays searchable.';};
+$('#xq').oninput=e=>$('#xqv').textContent=e.target.value;
 $('#xgo').onclick=()=>doExport();$('#dl').onclick=()=>{$$('.tab').find(t=>t.dataset.p==='export').click();$('#p-export').scrollIntoView({behavior:'smooth',block:'center'})};$('#xshare').onclick=share;
 
 /* ---------- command bar and voice ---------- */
@@ -917,7 +1077,19 @@ $('#mic').onclick=()=>{const SR=window.SpeechRecognition||window.webkitSpeechRec
 
 /* ---------- wiring ---------- */
 $('#tools').onclick=e=>{const b=e.target.closest('.tool');if(b)setTool(b.dataset.t)};
-$('#tabs').onclick=e=>{const b=e.target.closest('.tab');if(!b)return;$$('.tab').forEach(x=>x.classList.toggle('on',x===b));$$('.pane').forEach(q=>q.classList.toggle('on',q.id==='p-'+b.dataset.p));refreshAnalysis()};
+$('#tabs').onclick=e=>{const b=e.target.closest('.tab');if(!b)return;$$('.tab').forEach(x=>x.classList.toggle('on',x===b));$$('.pane').forEach(q=>q.classList.toggle('on',q.id==='p-'+b.dataset.p));refreshAnalysis();if(b.dataset.p==='export')renderEligibility()};
+function renderEligibility(){
+  const el=$('#pageElig');if(!el||!pages.length)return;
+  if(pages.length===1&&!pages[0].pdfBytes){el.innerHTML='';return}
+  el.innerHTML='<label class="f">Real-text export, page by page</label>'+pages.map((p,i)=>{
+    let state,why;
+    if(!p.pdfBytes){state='flat';why='not a PDF page'}
+    else if(p.vectorBroken){state='flat';why='cropped, extended or filtered'}
+    else if(p.rasterDirty){state='flat';why='erased or redacted'}
+    else{state='vec';why='unchanged, or text-only edits'}
+    return `<div class="row" style="margin:3px 0"><span class="chip ${state==='vec'?'on':''}" style="cursor:default">${state==='vec'?'Vector':'Flattened'}</span><span class="dim" style="font-size:12px">Page ${i+1} — ${why}</span></div>`;
+  }).join('');
+}
 $('#undo').onclick=undo;$('#redo').onclick=redo;$('#reset').onclick=resetPage;
 const cmpDown=()=>{if(!pages.length)return;const o=P().hist[0];if(o.w!==base.width||o.h!==base.height)return toast('Canvas size changed, cannot compare');cmpOn=true;bx.putImageData(o.img,0,0);render()};
 const cmpUp=()=>{if(!cmpOn)return;cmpOn=false;bx.putImageData(P().hist[P().hist.length-1].img,0,0);render()};
@@ -928,8 +1100,15 @@ $('#file').onchange=e=>{openFiles(e.target.files);e.target.value=''};$('#camfile
 $('#drop').ondragover=e=>{e.preventDefault();$('#drop').classList.add('on')};$('#drop').ondragleave=()=>$('#drop').classList.remove('on');
 $('#drop').ondrop=e=>{e.preventDefault();$('#drop').classList.remove('on');openFiles(e.dataTransfer.files)};
 window.addEventListener('paste',e=>{const fs=[...(e.clipboardData&&e.clipboardData.files||[])];if(fs.length)openFiles(fs)});
+const TOOLKEYS={'1':'move','2':'text','3':'replace','4':'erase','5':'redact','6':'crop','7':'extend'};
 document.addEventListener('keydown',e=>{if(/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName))return;
-  if((e.ctrlKey||e.metaKey)&&e.key==='z'){e.preventDefault();e.shiftKey?redo():undo()}else if((e.key==='Delete'||e.key==='Backspace')&&sel>=0)$('#o-del').click()});
+  if((e.ctrlKey||e.metaKey)&&e.key==='z'){e.preventDefault();e.shiftKey?redo():undo()}
+  else if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='e'){e.preventDefault();if(pages.length){$$('.tab').find(t=>t.dataset.p==='export').click();$('#p-export').scrollIntoView({behavior:'smooth',block:'center'})}}
+  else if((e.key==='Delete'||e.key==='Backspace')&&sel>=0)$('#o-del').click();
+  else if(TOOLKEYS[e.key]&&pages.length)setTool(TOOLKEYS[e.key]);
+  else if(e.key===']'&&pages.length>1)goPage((cur+1)%pages.length);
+  else if(e.key==='['&&pages.length>1)goPage((cur-1+pages.length)%pages.length);
+});
 
 /* ---------- credentials, projects, contact ---------- */
 const CREDS=[

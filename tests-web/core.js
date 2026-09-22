@@ -149,12 +149,100 @@ function groupItems(items){
   for(const it of its){
     const L=lines.find(l=>Math.abs(l.baseline-it.baseline)<Math.max(2,.3*l.size)&&it.x>=l.x1-1&&it.x-l.x1<Math.max(.6*l.size,8));
     if(L){const gap=it.x-L.x1;L.text+=(gap>.12*L.size&&!L.text.endsWith(' ')&&!it.str.startsWith(' ')?' ':'')+it.str;L.x1=it.x+it.w;if(it.str.length>L.longest){L.longest=it.str.length;L.pdf=it.m;L.size=Math.max(L.size,it.size)}}
-    else lines.push({text:it.str,x0:it.x,x1:it.x+it.w,baseline:it.baseline,size:it.size,longest:it.str.length,pdf:it.m});
+    else lines.push({text:it.str,x0:it.x,x1:it.x+it.w,baseline:it.baseline,size:it.size,longest:it.str.length,pdf:it.m,pdfX:it.px,pdfY:it.py});
   }
   lines.forEach(l=>{l.y0=l.baseline-l.size*.86;l.y1=l.baseline+l.size*.24});
   return lines.filter(l=>l.text.trim());
 }
 function vcard(a){
   return ['BEGIN:VCARD','VERSION:3.0','N:'+a.last+';'+a.first+';;;','FN:'+a.first+' '+a.last,'TITLE:'+a.title,'TEL;TYPE=CELL:'+a.tel,'EMAIL:'+a.email,...a.urls.map(u=>'URL:'+u),'END:VCARD'].join('\r\n');
+}
+
+// ---------- real PDF text editing helpers (pure, tested against real PDF content streams) ----------
+// Tokenises a PDF content stream (treated as Latin-1) and blanks the strings of text-show operators whose start point
+// matches one of `starts` (PDF user space, points). Later show ops chained on the same line (no repositioning) go with it.
+// Blanking is layout-safe: the next positioned text starts from Td/Tm, which never depends on glyph advances.
+function pdfStripText(src,starts,tol){
+  tol=tol||.9;const n=src.length,toks=[];let i=0;
+  const WS=c=>c===' '||c==='\n'||c==='\r'||c==='\t'||c==='\f'||c==='\0',DL='()<>[]{}/%';
+  const isNum=t=>/^[+-]?(\d+\.?\d*|\.\d+)$/.test(t);
+  function readStr(){let d=0,j=i;do{const c=src[j];if(c==='\\')j++;else if(c==='(')d++;else if(c===')')d--;j++}while(d>0&&j<n);return j}
+  function readArr(){const kids=[];const s=i;i++;while(i<n){const c=src[i];if(WS(c)){i++;continue}if(c===']'){i++;return{t:'arr',s,e:i,kids}}
+      if(c==='('){const e=readStr();kids.push({t:'str',s:i,e});i=e}else if(c==='<'&&src[i+1]!=='<'){const e=src.indexOf('>',i)+1||n;kids.push({t:'hex',s:i,e});i=e}else{let j=i;while(j<n&&!WS(src[j])&&!DL.includes(src[j]))j++;if(j===i)j=i+1;kids.push({t:'num',s:i,e:j,v:parseFloat(src.slice(i,j))});i=j}}
+    return{t:'arr',s,e:n,kids}}
+  while(i<n){
+    const c=src[i];if(WS(c)){i++;continue}
+    if(c==='%'){while(i<n&&src[i]!=='\n'&&src[i]!=='\r')i++;continue}
+    if(c==='('){const e=readStr();toks.push({t:'str',s:i,e});i=e;continue}
+    if(c==='['){toks.push(readArr());continue}
+    if(c==='<'){if(src[i+1]==='<'){toks.push({t:'dict',s:i,e:i+2});i+=2}else{const e=src.indexOf('>',i)+1||n;toks.push({t:'hex',s:i,e});i=e}continue}
+    if(c==='>'){toks.push({t:'dict',s:i,e:src[i+1]==='>'?i+2:i+1});i+=src[i+1]==='>'?2:1;continue}
+    if(c==='/'){let j=i+1;while(j<n&&!WS(src[j])&&!DL.includes(src[j]))j++;toks.push({t:'name',s:i,e:j,v:src.slice(i+1,j)});i=j;continue}
+    if(c===']'||c==='{'||c==='}'||c===')'){i++;continue}
+    let j=i;while(j<n&&!WS(src[j])&&!DL.includes(src[j]))j++;const w=src.slice(i,j);
+    if(isNum(w))toks.push({t:'num',s:i,e:j,v:parseFloat(w)});else{toks.push({t:'op',s:i,e:j,v:w});
+      if(w==='ID'){const m=/[\s]EI(?=[\s]|$)/g;m.lastIndex=j;const r=m.exec(src);i=r?r.index+r[0].length:n;toks.push({t:'op',s:j,e:i,v:'EI'});continue}}
+    i=j;
+  }
+  const mul=(m,k)=>[m[0]*k[0]+m[1]*k[2],m[0]*k[1]+m[1]*k[3],m[2]*k[0]+m[3]*k[2],m[2]*k[1]+m[3]*k[3],m[4]*k[0]+m[5]*k[2]+k[4],m[4]*k[1]+m[5]*k[3]+k[5]];
+  let ctm=[1,0,0,1,0,0],stack=[],tm=[1,0,0,1,0,0],tlm=[1,0,0,1,0,0],lead=0,rise=0,chain=false,args=[];const edits=[];let matched=0;
+  const startPt=()=>{const x=rise*tm[2]+tm[4],y=rise*tm[3]+tm[5];return[x*ctm[0]+y*ctm[2]+ctm[4],x*ctm[1]+y*ctm[3]+ctm[5]]};
+  const hit=()=>{const p=startPt();return starts.some(s=>Math.abs(s.x-p[0])<=tol&&Math.abs(s.y-p[1])<=tol)};
+  const td=(x,y)=>{tlm=mul([1,0,0,1,x,y],tlm);tm=tlm.slice();chain=false};
+  const blank=a=>{if(a.t==='str')edits.push([a.s,a.e,'()']);else if(a.t==='hex')edits.push([a.s,a.e,'<>']);else if(a.t==='arr')edits.push([a.s,a.e,'[]'])};
+  for(const tk of toks){
+    if(tk.t!=='op'){args.push(tk);continue}
+    const op=tk.v,nums=args.filter(a=>a.t==='num').map(a=>a.v);
+    switch(op){
+      case'q':stack.push(ctm.slice());break;case'Q':if(stack.length)ctm=stack.pop();break;
+      case'cm':if(nums.length>=6)ctm=mul(nums.slice(-6),ctm);break;
+      case'BT':tm=[1,0,0,1,0,0];tlm=[1,0,0,1,0,0];chain=false;break;case'ET':chain=false;break;
+      case'TL':lead=nums[0]||0;break;case'Ts':rise=nums[0]||0;break;
+      case'Td':td(nums[0]||0,nums[1]||0);break;case'TD':lead=-(nums[1]||0);td(nums[0]||0,nums[1]||0);break;
+      case'Tm':if(nums.length>=6){tm=nums.slice(-6);tlm=tm.slice()}chain=false;break;
+      case'T*':td(0,-lead);break;
+      case'Tj':case'TJ':{const a=args[args.length-1];if(a&&(chain||hit())){chain=true;matched++;blank(a)}break}
+      case"'":{td(0,-lead);const a=args[args.length-1];if(a&&hit()){chain=true;matched++;blank(a)}break}
+      case'"':{td(0,-lead);const a=args[args.length-1];if(a&&hit()){chain=true;matched++;blank(a)}break}
+    }
+    args=[];
+  }
+  if(!edits.length)return{out:src,matched:0};
+  edits.sort((a,b)=>a[0]-b[0]);let out='',pos=0;for(const[s,e,r]of edits){out+=src.slice(pos,s)+r;pos=e}out+=src.slice(pos);
+  return{out,matched};
+}
+// Which pixels of an edited page differ from the original render? Returns tight boxes (x1,y1 exclusive) and the changed-area fraction.
+function changedPatches(a,b,w,h,cell,merge){
+  cell=cell||8;merge=merge==null?6:merge;const cw=Math.ceil(w/cell),ch=Math.ceil(h/cell),flag=new Uint8Array(cw*ch);let px=0;
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++){const i=(y*w+x)*4;if(Math.abs(a[i]-b[i])+Math.abs(a[i+1]-b[i+1])+Math.abs(a[i+2]-b[i+2])>12||Math.abs(a[i+3]-b[i+3])>8){flag[((y/cell)|0)*cw+((x/cell)|0)]=1;px++}}
+  const seen=new Uint8Array(cw*ch),boxes=[];
+  for(let s=0;s<cw*ch;s++){if(!flag[s]||seen[s])continue;const q=[s];seen[s]=1;let x0=1e9,y0=1e9,x1=-1,y1=-1;
+    while(q.length){const c=q.pop(),cx=c%cw,cy=(c/cw)|0;
+      for(let y=cy*cell;y<Math.min(h,cy*cell+cell);y++)for(let x=cx*cell;x<Math.min(w,cx*cell+cell);x++){const i=(y*w+x)*4;if(Math.abs(a[i]-b[i])+Math.abs(a[i+1]-b[i+1])+Math.abs(a[i+2]-b[i+2])>12||Math.abs(a[i+3]-b[i+3])>8){if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y}}
+      for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const nx=cx+dx,ny=cy+dy;if(nx<0||ny<0||nx>=cw||ny>=ch)continue;const k=ny*cw+nx;if(flag[k]&&!seen[k]){seen[k]=1;q.push(k)}}}
+    boxes.push({x0,y0,x1:x1+1,y1:y1+1})}
+  let again=true;while(again){again=false;for(let i=0;i<boxes.length&&!again;i++)for(let j=i+1;j<boxes.length;j++){const A=boxes[i],B=boxes[j];
+      if(A.x0-merge<B.x1&&B.x0-merge<A.x1&&A.y0-merge<B.y1&&B.y0-merge<A.y1){boxes[i]={x0:Math.min(A.x0,B.x0),y0:Math.min(A.y0,B.y0),x1:Math.max(A.x1,B.x1),y1:Math.max(A.y1,B.y1)};boxes.splice(j,1);again=true;break}}}
+  return{boxes,frac:px/(w*h)};
+}
+// canvas -> PDF user space affine from pdf.js viewport samples: o=(0,0), x=(1,0), y=(0,1) already converted with convertToPdfPoint
+function affFromPoints(o,x,y){return[x[0]-o[0],x[1]-o[1],y[0]-o[0],y[1]-o[1],o[0],o[1]]}
+const applyAff=(f,x,y)=>[f[0]*x+f[2]*y+f[4],f[1]*x+f[3]*y+f[5]];
+const affUnrotated=f=>Math.abs(f[1])<1e-6&&Math.abs(f[2])<1e-6&&f[0]>0&&f[3]<0;
+// map a text object's CSS font stack + weight to something embeddable in a PDF
+const WEBFONTS={'roboto':'roboto','open sans':'open-sans','lato':'lato','montserrat':'montserrat','poppins':'poppins','inter':'inter','nunito':'nunito','dm sans':'dm-sans','work sans':'work-sans','space grotesk':'space-grotesk','playfair display':'playfair-display','merriweather':'merriweather','lora':'lora','jetbrains mono':'jetbrains-mono'};
+function pickPdfFont(css,weight,italic){
+  const first=(css||'').split(',')[0].replace(/["']/g,'').trim().toLowerCase(),bold=+weight>=600,all=(css||'').toLowerCase();
+  if(WEBFONTS[first])return{kind:'web',id:WEBFONTS[first],bold,italic:!!italic,name:first};
+  let base='Helvetica';
+  if(/courier|mono|consolas|menlo/.test(first)||(/monospace/.test(all)&&!/sans|serif/.test(first)&&first===''))base='Courier';
+  else if(/times|georgia|garamond|palatino|cambria|serif/.test(first)&&!/sans/.test(first))base='Times';
+  else if(first==='system-ui'||first==='-apple-system'||/arial|helvet|calibri|carlito|segoe|sans/.test(first)){base='Helvetica'}
+  else if(/serif/.test(all)&&!/sans/.test(all))base='Times';
+  return{kind:'std',base,bold,italic:!!italic,name:stdFontName(base,bold,!!italic)};
+}
+function stdFontName(base,bold,italic){
+  if(base==='Times')return bold&&italic?'Times-BoldItalic':bold?'Times-Bold':italic?'Times-Italic':'Times-Roman';
+  const b=base==='Courier'?'Courier':'Helvetica';return bold&&italic?b+'-BoldOblique':bold?b+'-Bold':italic?b+'-Oblique':b;
 }
 //</core>

@@ -40,5 +40,24 @@ await t('OCR path: detect lines, edit one, PII redaction, translation glossary',
   ids('#tlang').value='hi';await T.translatePage();const o=T.objs.find(x=>x.t==='साइन इन');ok(o,'glossary translation applied: '+JSON.stringify(T.objs.map(x=>x.t)));ok(o.f.includes('Noto Sans Devanagari'),o.f);ok(T.P().lines.length===1,'translated line removed from list')});
 await t('command parser drives the editor',async()=>{T.startSession([{canvas:mkCanvas(120,90,()=>[200,210,230]),name:'x.png'}]);await T.runCmd('extend 30');ok(T.base.width===180);await T.runCmd('dark mode');const d=T.bx.getImageData(2,2,1,1).data;ok(d[0]<80,'dark '+d[0]);await T.runCmd('undo')});
 await t('sample page loads',async()=>{T.makeSample();ok(T.base.width>0)});
+
+await t('export eligibility panel reflects real per-page flags (vector vs flattened, with reasons)',async()=>{
+  const items=[{str:'Hi',x:10,baseline:20,w:20,size:12,m:{family:'Arial',weight:400,italic:false},px:10,py:20}];
+  T.startSession([{canvas:mkCanvas(200,150,()=>[255,255,255]),name:'v.pdf p1',items,pdfSize:[200,150],pdfBytes:new ArrayBuffer(4),srcPageIndex:0,vpScale:1},
+                  {canvas:mkCanvas(120,90,()=>[255,255,255]),name:'img.png'}]);
+  T.renderEligibility();let html=ids('#pageElig').innerHTML;ok(/Vector/.test(html)&&/Flattened/.test(html),html);
+  T.goPage(0);T.setTool('erase');await drag(1,1,10,10);
+  T.renderEligibility();html=ids('#pageElig').innerHTML;
+  ok((html.match(/Flattened/g)||[]).length===2,'both pages should now read flattened: '+html);
+});
+await t('batch translate and batch redact run across every open page',async()=>{
+  const mkPage=(txt)=>{const items=[{str:txt,x:10,baseline:20,w:80,size:12,m:{family:'Arial',weight:400,italic:false},px:10,py:20}];
+    return{canvas:mkCanvas(200,60,(x,y)=>(y>=8&&y<22&&x>=10&&x<90&&x%8<3)?[20,20,20]:[255,255,255]),name:'p.pdf',items,pdfSize:[200,60],pdfBytes:new ArrayBuffer(4),srcPageIndex:0,vpScale:1}};
+  T.startSession([mkPage('Sign in'),mkPage('mail me at nikhil@example.com')]);
+  ids('#tlang').value='hi';await T.translateAll();
+  T.goPage(0);ok(T.objs.some(o=>o.t==='साइन इन'),'page 1 translated: '+JSON.stringify(T.objs.map(o=>o.t)));
+  ids('#redMode').value='blk';await T.scanPIIAll();
+  T.goPage(1);ok(T.bx.getImageData(30,15,1,1).data[0]===0,'page 2 email redacted after batch scan');
+});
 console.log(`\n${pass} passed, ${fail} failed`);process.exit(fail?1:0);
 })();

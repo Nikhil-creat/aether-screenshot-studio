@@ -1,4 +1,4 @@
-const fs=require('fs');const src=fs.readFileSync(process.argv[2]||require('path').join(__dirname,'..','index.html'),'utf8');
+const fs=require('fs');const src=fs.readFileSync(process.argv[2]||'core.js','utf8');
 const core=src.match(/\/\/<core>([\s\S]*?)\/\/<\/core>/)[1];
 const names=[...core.matchAll(/(?:^|\n)(?:const|function)\s+([A-Za-z0-9_]+)/g)].map(m=>m[1]);
 const api=new Function(core+'\nreturn {'+[...new Set(names)].join(',')+'}')();
