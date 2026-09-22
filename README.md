@@ -3,8 +3,12 @@
 # Aether AI Screenshot Studio
 **Autonomous, private, self-healing screenshot intelligence.**
 
-Designed & built by **[Nikhil Chary Sriramoju](https://github.com/Nikhil-creat)**
-[GitHub](https://github.com/Nikhil-creat) · [LinkedIn](https://in.linkedin.com/in/nikhil-chary-sriramoju-95041b38a) · [sriramojunikhil66@gmail.com](mailto:sriramojunikhil66@gmail.com) · +91 6300556301
+Designed & built by
+# **NIKHIL CHARY SRIRAMOJU**
+[GitHub](https://github.com/Nikhil-creat) 
+· [LinkedIn](https://in.linkedin.com/in/nikhil-chary-sriramoju-95041b38a) · 
+[sriramojunikhil66@gmail.com](mailto:sriramojunikhil66@gmail.com) 
+· +91 6300556301
 
 </div>
 
@@ -37,4 +41,4 @@ See `docs/ARCHITECTURE.md` for the sequence diagram, feature map and API.
 `backend/app` — `main.py` API · `engine.py` · `cv/` · `rag/` · `agents/graph.py` · `services/` · `collab/` · `auth.py` · `branding.py`
 `frontend` — Next.js 14 App Router studio UI · `demo/` — offline demo (GitHub Pages ready)
 
-© Nikhil Chary Sriramoju
+© NIKHIL CHARY SRIRAMOJU 
